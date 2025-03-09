@@ -53,7 +53,7 @@ def semantic_chunking(text, embedding_model, chunk_size=5, similarity_threshold=
     return chunks
 
 # Set Google API key (replace with your key or use an env variable)
-GOOGLE_API_KEY = 'AIzaSyCfh94SWPJdhw9BGPEn7y3SZAzV30InNwg' # "YOUR_GOOGLE_API_KEY"
+GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY"
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
 st.set_page_config(page_title="Chat with Your PDFs (Gemini)")
