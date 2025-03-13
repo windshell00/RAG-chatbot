@@ -14,46 +14,8 @@ from langchain.text_splitter import NLTKTextSplitter
 from langchain.text_splitter import TokenTextSplitter
 import numpy as np
 
-# 加载预训练的句子嵌入模型
-
-def semantic_chunking(text, embedding_model, chunk_size=5, similarity_threshold=0.75):
-    """
-    按语义相似度切割文本，确保每个 chunk 内部语义相关。
-    :param chunk_size: 每个 chunk 最多包含的句子数。
-    :param similarity_threshold: 语义相似度的阈值（越高分块越细）。
-    :return: 语义分块后的文本列表。
-    """
-    # 先按句子拆分，句号分割
-    sentences = text.split(". ") 
-    
-    # 计算句子的 embedding
-    embeddings = [embedding_model.embed_query(sentence) for sentence in sentences]
-
-    chunks = []
-    current_chunk = [sentences[0]]  # 初始化第一个 chunk
-    current_embedding = embeddings[0]  # 取第一个句子的 embedding
-    
-    for i in range(1, len(sentences)):
-        similarity = np.dot(current_embedding, embeddings[i]) / (np.linalg.norm(current_embedding) * np.linalg.norm(embeddings[i]))
-        
-        if len(current_chunk) >= chunk_size or similarity < similarity_threshold:
-            # 开始新的 chunk
-            chunks.append(" ".join(current_chunk))
-            current_chunk = [sentences[i]]
-            current_embedding = embeddings[i]
-        else:
-            # 继续加入当前 chunk
-            current_chunk.append(sentences[i])
-            current_embedding = np.mean([current_embedding, embeddings[i]], axis=0)  # 取平均 embedding
-    
-    # 添加最后一个 chunk
-    if current_chunk:
-        chunks.append(" ".join(current_chunk))
-    
-    return chunks
-
 # Set Google API key (replace with your key or use an env variable)
-GOOGLE_API_KEY = "YOUR_GOOGLE_API_KEY"
+GOOGLE_API_KEY = 'AIzaSyCfh94SWPJdhw9BGPEn7y3SZAzV30InNwg' # "YOUR_GOOGLE_API_KEY"
 os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
 st.set_page_config(page_title="Chat with Your PDFs (Gemini)")
@@ -82,23 +44,10 @@ if uploaded_files:
                     documents.extend(loader.load())
 
                 # Split documents into chunks
-                #embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-                #text_splitter = SemanticChunker(embedding_model, chunk_size=1000)
-                #text_splitter = NLTKTextSplitter(chunk_size=500)
-                #text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
-
-                # Generate embeddings and store in FAISS
-                # ------------------------------------------------- #
                 embedding_model = GoogleGenerativeAIEmbeddings(model="models/text-embedding-004")
-
-                # **运行语义分块**
-                print(type(documents[1]))
-                docs = semantic_chunking(documents[1].page_content, embedding_model, chunk_size=5, similarity_threshold=0.75)
+                
                 text_splitter = TokenTextSplitter(chunk_size=256, chunk_overlap=50) 
-                docs2 = text_splitter.split_documents(documents)
-                print(docs[0])
-                print("---")
-                print(docs2[0])
+                docs = text_splitter.split_documents(documents)
 
                 # use your embeddings model here
                 st.session_state.vector_store = FAISS.from_documents(docs, embedding_model)
@@ -134,7 +83,7 @@ if uploaded_files:
             #search_type="similarity_score_threshold",
             #search_kwargs={"k": 10, "score_threshold": 0.5}
             search_type="mmr",  # Maximum Marginal Relevance
-            search_kwargs={"k": 8, "fetch_k": 20, "lambda_mult": 0.6}  # Adjust these parameters as needed
+            search_kwargs={"k": 6, "fetch_k": 20, "lambda_mult": 0.7}  # Adjust these parameters as needed
         )
 
 
@@ -143,13 +92,14 @@ if uploaded_files:
         # from langchain.prompts import PromptTemplate
 
         # Create a custom prompt template
-        template = """You are a helpful assistant that answers questions based on the provided documents.
-        
-        Given the context information and not prior knowledge, answer the following question:
-        Question: {user_input}
-        
-        Answer the question with detailed information from the documents. If the answer is not in the documents, 
-        say "I don't have enough information to answer this question." Cite specific parts of the documents when possible.
+        template = """You are a helpful assistant that retrieves relevant information from provided documents to accurately answer user questions. 
+        Your response must be based only on the given context and document content.
+        Instructions:
+        1. Use only the provided documents as your source of information.
+        2. Do not fabricate information or speculate beyond what is present in the documents.
+        3. If a direct answer is not found, provide the closest relevant information or logically deduce an answer using the document content.
+        4. Clearly indicate when an answer is based on deduction rather than explicit information.
+        User Question: {user_input}
         """
         
         # Create the QA chain with the custom prompt
@@ -158,7 +108,7 @@ if uploaded_files:
         qa_chain = RetrievalQA.from_chain_type(
             ## use your llm model here
             #llm=ChatGoogleGenerativeAI(model="gemini-2.0-flash", temperature=0.5),
-            llm=ChatGoogleGenerativeAI(model="gemini-2.0-pro-exp-02-05", temperature=0.2),
+            llm=ChatGoogleGenerativeAI(model="gemini-2.0-pro-exp-02-05", temperature=0.5),
             retriever=retriever,
             chain_type="stuff",  # "stuff" chain type puts all retrieved documents into the prompt context
             return_source_documents=True,  # Return source documents for reference
@@ -177,7 +127,7 @@ if uploaded_files:
             # 2. Retrieves relevant documents using the retriever
             # 3. Formats those documents as the context in the prompt
             # 4. Sends the formatted prompt to the LLM
-            response = qa_chain.invoke({"query": template.format(user_input =user_input)})
+            response = qa_chain.invoke({"query": template.format(user_input = user_input)})
             
             # For debugging, you can see what's in the response
             # st.write("Response keys:", list(response.keys()))
